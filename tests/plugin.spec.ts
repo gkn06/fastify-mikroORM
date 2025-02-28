@@ -1,8 +1,8 @@
-import Fastify, { FastifyInstance } from 'fastify';
-import { MikroORM, Options } from '@mikro-orm/core';
+import Fastify, { type FastifyInstance } from 'fastify';
+import { MikroORM, type Options } from '@mikro-orm/core';
 import { MariaDbDriver } from '@mikro-orm/mariadb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import mikroOrmConnector, { PluginMikroORM } from '../src/plugin';
+import mikroOrmConnector from '../src/plugin';
 
 const testOptions: Options<MariaDbDriver> = {
     host: '127.0.0.1',
@@ -11,25 +11,21 @@ const testOptions: Options<MariaDbDriver> = {
     driver: MariaDbDriver,
     user: 'root',
     password: 'root',
-    entities: [],
-    discovery: { warnWhenNoEntities: false },
-    debug: false,
-    allowGlobalContext: true,
+    discovery: { warnWhenNoEntities: false }
 }
 
 describe('fastify-mikroORM', () => {
   let fastify: FastifyInstance;
+  let orm: MikroORM | null;
 
   beforeEach(async () => {
     fastify = Fastify();
-  });
-
-  afterEach(async () => {
-    await fastify.close();
+    orm = null;
   });
 
   it('should register MikroORM without namespace', async () => {
     await fastify.register(mikroOrmConnector, testOptions);
+    orm = fastify.orm;
 
     expect(fastify.orm).toBeInstanceOf(MikroORM);
   });
@@ -39,12 +35,15 @@ describe('fastify-mikroORM', () => {
       ...testOptions,
       namespace: 'test',
     });
+    orm = fastify.orm.test;
 
     expect(fastify.orm.test).toBeInstanceOf(MikroORM);
+    await dropSchema(fastify.orm.test);
   });
 
   it('should throw an error if MikroORM is already registered', async () => {
     await fastify.register(mikroOrmConnector, testOptions);
+    orm = fastify.orm;
 
     await expect(fastify.register(mikroOrmConnector, testOptions)).rejects.toThrow(
       'MikroORM is already registered',
@@ -56,6 +55,7 @@ describe('fastify-mikroORM', () => {
       ...testOptions,
       namespace: 'test',
     });
+    orm = fastify.orm.test;
 
     await expect(
       fastify.register(mikroOrmConnector, {
@@ -104,7 +104,6 @@ describe('fastify-mikroORM', () => {
     } as unknown as MikroORM;
 
     await fastify.register(mikroOrmConnector, {
-      ...testOptions,
       connection: ormMock,
     });
 
@@ -116,7 +115,6 @@ describe('fastify-mikroORM', () => {
         close: vi.fn(),
     } as unknown as MikroORM;
     await fastify.register(mikroOrmConnector, {
-      ...testOptions,
       namespace: 'test',
       connection: ormMock,
     });
@@ -150,4 +148,21 @@ describe('fastify-mikroORM', () => {
       'MikroORM connection test closed',
     );
   });
+
+  afterEach(async () => {
+    if (orm) {
+      await dropSchema(orm);
+    }
+    await fastify.close();
+  });
 });
+
+async function dropSchema(orm: MikroORM) {
+  try {
+    const generator = orm.getSchemaGenerator();
+    await generator.dropSchema({dropDb: true});
+    console.log('Schema dropped successfully.');
+  } catch (error) {
+    console.error('Error dropping schema:', error);
+  }
+}

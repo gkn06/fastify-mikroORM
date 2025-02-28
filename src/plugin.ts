@@ -1,5 +1,5 @@
-import { MikroORM, Options } from '@mikro-orm/core';
-import { FastifyPluginAsync } from 'fastify';
+import { MikroORM, type Options } from '@mikro-orm/core';
+import type { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 
 export type NameSpacedMikroORM = {
